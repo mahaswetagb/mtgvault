@@ -76,8 +76,7 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
   private async getWorker() {
     if (!this.worker) {
       this.status.set('Loading text recognition (first time only)…');
-      const moduleName: string = 'tesseract.js';
-      const { createWorker } = await import(moduleName);
+      const { createWorker } = await import('tesseract.js');
       this.worker = await createWorker('eng');
       await this.worker.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ,'-" });
     }
@@ -96,7 +95,9 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
       const res = await wk.recognize(c);
       this.manual = String(res.data.text).replace(/[^A-Za-z ,'’\-]/g, ' ').replace(/\s+/g, ' ').trim();
       await this.lookup(this.manual);
-    } catch { this.msg.set('Could not read the card. Try again with better light, or type the name.'); }
+    } catch (e) {
+      this.msg.set(e instanceof Error ? `Text recognition failed: ${e.message}` : 'Could not read the card. Try again with better light, or type the name.');
+    }
     this.busy.set(false);
   }
   lookup(name: string) {
