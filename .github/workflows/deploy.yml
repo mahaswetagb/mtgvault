@@ -12,8 +12,19 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: npm install --no-audit --no-fund
-      - name: Inject Google Client ID
-        run: sed -i "s/YOUR_GOOGLE_CLIENT_ID/${{ vars.GOOGLE_CLIENT_ID }}/" src/app/config.ts
+      - name: Inject optional Google Client ID
+        if: ${{ vars.GOOGLE_CLIENT_ID != '' }}
+        env:
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'src/app/config.ts';
+          const source = fs.readFileSync(path, 'utf8');
+          const placeholder = "export const GOOGLE_CLIENT_ID = '';";
+          const configured = `export const GOOGLE_CLIENT_ID = ${JSON.stringify(process.env.GOOGLE_CLIENT_ID)};`;
+          fs.writeFileSync(path, source.replace(placeholder, configured));
+          NODE
       - run: npx ng build --base-href /${{ github.event.repository.name }}/
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist/mtg-vault/browser }

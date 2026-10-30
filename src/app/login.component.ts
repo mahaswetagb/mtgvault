@@ -16,18 +16,19 @@ import { GOOGLE_CLIENT_ID } from './config';
       @if (err()) { <p class="err">{{ err() }}</p> }
       <button class="btn" type="submit" [disabled]="busy()">{{ busy() ? '…' : mode() === 'in' ? 'Sign in' : 'Create account' }}</button>
     </form>
-    <div class="or"><span>or</span></div>
-    <div #btn class="gbtn"></div>
-    @if (missing) { <p class="warn">Google login needs a Client ID in <code>src/app/config.ts</code> (email login works without it).</p> }
+    @if (googleEnabled) {
+      <div class="or"><span>or</span></div>
+      <div #btn class="gbtn"></div>
+    }
     <div class="orbit"><i>🔥</i><i>💧</i><i>🌿</i><i>⚡</i><i>💀</i></div></div>`,
 })
 export class LoginComponent implements AfterViewInit {
   private auth = inject(Auth); private fb = inject(FormBuilder);
-  missing = GOOGLE_CLIENT_ID.startsWith('YOUR_');
+  googleEnabled = Boolean(GOOGLE_CLIENT_ID);
   mode = signal<'in' | 'up'>('in'); err = signal(''); busy = signal(false);
   f = this.fb.nonNullable.group({ name: '', email: '', password: '' });
   @ViewChild('btn') btn!: ElementRef<HTMLElement>;
-  ngAfterViewInit() { if (!this.missing) this.auth.renderButton(this.btn.nativeElement); }
+  ngAfterViewInit() { if (this.googleEnabled) this.auth.renderButton(this.btn.nativeElement); }
   async submit() {
     const v = this.f.getRawValue(); this.err.set(''); this.busy.set(true);
     try { this.mode() === 'up' ? await this.auth.register(v.name, v.email, v.password) : await this.auth.loginEmail(v.email, v.password); }
