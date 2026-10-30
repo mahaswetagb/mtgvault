@@ -46,3 +46,18 @@ input,select{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,
 .authform{display:flex;flex-direction:column;gap:10px;text-align:left}.authform input{width:100%}.authform .btn{padding:12px}.authform .btn:disabled{opacity:.6}.err{color:#fb7185;font-size:.85rem;margin:0}
 .or{display:flex;align-items:center;gap:12px;color:#8e91b5;margin:18px 0 6px;font-size:.85rem}.or::before,.or::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.12)}
 .avatar.ini{display:inline-grid;place-items:center;background:linear-gradient(135deg,#7c3aed,#0ea5e9);font-weight:700}
+
+/* ---- Card scanner ---- */
+.cam{position:relative;display:block;width:min(100%,440px);margin:0 auto 12px;overflow:hidden;background:#000;border-radius:18px}
+.cam video{display:block;width:100%;height:100%;object-fit:cover}
+.cam .guide{position:absolute;left:50%;top:10%;transform:translateX(-50%);border:2px dashed rgba(255,255,255,.75);border-radius:12px;pointer-events:none}
+.cam .zone{position:absolute;left:5%;top:3.5%;width:75%;height:8.5%;border:2px solid #38bdf8;border-radius:6px;background:rgba(56,189,248,.12);display:flex;align-items:center;padding-left:6px}
+.cam .zone em{font-size:.7rem;color:#bae6fd}
+.cam .line{position:absolute;left:0;right:0;top:50%;height:2px;background:linear-gradient(90deg,transparent,#a78bfa,transparent);opacity:.6}
+.cam .warn{margin:0}
+.scanning{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:rgba(11,11,26,.75);text-align:center;padding:12px;font-size:.9rem}
+.tip{margin:0 0 6px;text-align:center}
+.cam+.tip{max-width:440px;margin-left:auto;margin-right:auto}
+.found{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.found>img{width:min(100%,240px);border-radius:14px;margin:0 auto}
+.found .info{flex:1;min-width:220px}
