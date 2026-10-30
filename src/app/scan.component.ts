@@ -9,18 +9,26 @@ interface Rect { x: number; y: number; w: number; h: number }
 /** Camera scanner: captures a frame, OCRs the card title (Tesseract.js, in-browser), looks it up on Scryfall, asks for confirmation. */
 @Component({
   selector: 'app-scan', standalone: true, imports: [FormsModule, RouterLink], host: { class: 'page' },
+  styles: [`
+    .cam { position: relative; width: min(100%, 540px); margin: 0 auto 14px; overflow: hidden; background: rgba(0, 0, 0, .35); }
+    .cam video { display: block; width: 100%; height: 100%; object-fit: fill; }
+    .guide { position: absolute; top: 10%; left: 50%; transform: translateX(-50%); box-sizing: border-box; border: 2px dashed rgba(255, 255, 255, .8); border-radius: 14px; pointer-events: none; }
+    .guide .zone { position: absolute; top: 3.5%; left: 5%; width: 90%; height: 12%; box-sizing: border-box; border: 2px solid #38bdf8; border-radius: 5px; background: rgba(56, 189, 248, .08); }
+    .guide .zone em { position: absolute; top: -1.4em; right: 0; padding: 1px 5px; border-radius: 4px; background: rgba(0, 0, 0, .7); color: #fff; font-size: .7rem; font-style: normal; white-space: nowrap; }
+    .guide .line { position: absolute; top: 15%; left: 0; right: 0; height: 2px; background: rgba(56, 189, 248, .65); }
+  `],
   template: `
   <h1>Scan <span class="grad">Card</span> <small class="muted">{{ added() }} added this session</small></h1>
   <div class="cam glass" [style.aspect-ratio]="ratio()">
     <video #video playsinline muted autoplay (loadedmetadata)="meta()"></video>
     @if (!camErr()) {
-      <div class="guide" [style.width.%]="gw()" style="height:80%"><i class="line"></i><span class="zone"><em>card title here</em></span></div>
+      <div class="guide" [style.width.%]="gw()" [style.height.%]="gh()"><i class="line"></i><span class="zone"><em>card title here</em></span></div>
     } @else { <p class="warn pad">{{ camErr() }}</p> }
     @if (busy()) { <div class="scanning"><div class="spinner"></div><span>{{ status() }}</span></div> }
   </div>
   <p class="muted tip">Fit the whole card inside the dashed frame with the title in the blue box. Good light, no glare.</p>
   <div class="actions">
-    <button class="btn" [disabled]="busy() || !!camErr()" (click)="capture()">📸 Capture</button>
+    <button class="btn" [disabled]="busy() || !!camErr() || !cameraReady()" (click)="capture()">📸 Capture</button>
     <label class="btn ghost">📁 Upload photo<input type="file" accept="image/*" capture="environment" hidden (change)="onFile($event)"></label>
     <a class="btn ghost" routerLink="/add">Search manually</a>
   </div>
@@ -46,26 +54,41 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
   conds = CONDITIONS;
   @ViewChild('video') video!: ElementRef<HTMLVideoElement>;
   private stream?: MediaStream; private worker: any;
-  camErr = signal(''); busy = signal(false); status = signal(''); msg = signal(''); toast = signal('');
-  ratio = signal('3/4'); gw = signal(50); added = signal(0);
+  camErr = signal(''); cameraReady = signal(false); busy = signal(false); status = signal(''); msg = signal(''); toast = signal('');
+  ratio = signal('3/4'); gw = signal(50); gh = signal(80); added = signal(0);
   detected = signal<CardPrint | null>(null); prints = signal<CardPrint[]>([]);
   manual = ''; qty = 1; cond = 'NM'; foil = false;
 
   async ngAfterViewInit() {
     try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera access is not available in this browser.');
       this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } }, audio: false });
       const v = this.video.nativeElement; v.srcObject = this.stream; await v.play();
-    } catch { this.camErr.set('Camera not available (needs HTTPS and camera permission). Use "Upload photo" or type the card name below.'); }
+      this.meta();
+    } catch (e) {
+      this.camErr.set(`${e instanceof Error ? e.message : 'Camera not available'} Use "Upload photo" or type the card name below.`);
+    }
   }
   ngOnDestroy() { this.stream?.getTracks().forEach(t => t.stop()); this.worker?.terminate(); }
   meta() {
     const v = this.video.nativeElement;
-    this.ratio.set(`${v.videoWidth}/${v.videoHeight}`); this.gw.set(((0.8 * v.videoHeight * 5) / 7 / v.videoWidth) * 100);
+    if (!v.videoWidth || !v.videoHeight) return;
+    const frame = this.cardFrame(v.videoWidth, v.videoHeight);
+    this.ratio.set(`${v.videoWidth}/${v.videoHeight}`);
+    this.gw.set(frame.w / v.videoWidth * 100); this.gh.set(frame.h / v.videoHeight * 100);
+    this.cameraReady.set(true);
+  }
+  private cardFrame(width: number, height: number): Rect {
+    const h = Math.min(height * 0.8, width * 0.9 * 7 / 5), w = h * 5 / 7;
+    return { x: (width - w) / 2, y: (height - h) / 2, w, h };
   }
   capture() {
-    const v = this.video.nativeElement; if (!v.videoWidth) return;
-    const h = v.videoHeight * 0.8, w = (h * 5) / 7;
-    this.ocr(v, { x: (v.videoWidth - w) / 2, y: (v.videoHeight - h) / 2, w, h });
+    const v = this.video.nativeElement;
+    if (!this.cameraReady() || !v.videoWidth || !v.videoHeight || v.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.msg.set('Camera is still starting. Wait for the preview, then capture again.');
+      return;
+    }
+    this.ocr(v, this.cardFrame(v.videoWidth, v.videoHeight));
   }
   async onFile(e: Event) {
     const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return;
@@ -85,7 +108,7 @@ export class ScanComponent implements AfterViewInit, OnDestroy {
   private async ocr(src: CanvasImageSource, r: Rect) {
     this.busy.set(true); this.msg.set(''); this.detected.set(null); this.status.set('Reading card…');
     try {
-      const x = r.x + r.w * 0.05, y = r.y + r.h * 0.035, w = r.w * 0.75, h = r.h * 0.085, k = Math.min(3, 1000 / w);
+      const x = r.x + r.w * 0.05, y = r.y + r.h * 0.035, w = r.w * 0.9, h = r.h * 0.12, k = Math.min(3, 1200 / w);
       const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
       const g = c.getContext('2d')!; g.drawImage(src, x, y, w, h, 0, 0, c.width, c.height);
       const d = g.getImageData(0, 0, c.width, c.height), p = d.data;
